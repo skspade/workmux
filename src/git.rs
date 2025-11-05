@@ -30,7 +30,8 @@ pub fn get_main_worktree_root() -> Result<PathBuf> {
     // Get all worktrees
     let list_str = Cmd::new("git")
         .args(&["worktree", "list", "--porcelain"])
-        .run_and_capture_stdout()?;
+        .run_and_capture_stdout()
+        .context("Failed to list worktrees while locating main worktree")?;
 
     let worktrees = parse_worktree_list_porcelain(&list_str)?;
 
@@ -174,7 +175,8 @@ fn parse_worktree_list_porcelain(output: &str) -> Result<Vec<(PathBuf, String)>>
 pub fn get_worktree_path(branch_name: &str) -> Result<PathBuf> {
     let list_str = Cmd::new("git")
         .args(&["worktree", "list", "--porcelain"])
-        .run_and_capture_stdout()?;
+        .run_and_capture_stdout()
+        .context("Failed to list worktrees while locating worktree path")?;
 
     let worktrees = parse_worktree_list_porcelain(&list_str)?;
 
@@ -191,7 +193,8 @@ pub fn get_worktree_path(branch_name: &str) -> Result<PathBuf> {
 pub fn list_worktrees() -> Result<Vec<(PathBuf, String)>> {
     let list = Cmd::new("git")
         .args(&["worktree", "list", "--porcelain"])
-        .run_and_capture_stdout()?;
+        .run_and_capture_stdout()
+        .context("Failed to list worktrees")?;
     parse_worktree_list_porcelain(&list)
 }
 
