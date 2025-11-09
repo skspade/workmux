@@ -112,8 +112,8 @@ post_create:
 
 files:
   symlink:
-    - '<global>'  # Include global symlinks (node_modules)
-    - .pnpm-store  # Add project-specific symlink
+    - '<global>' # Include global symlinks (node_modules)
+    - .pnpm-store # Add project-specific symlink
 
 panes:
   - command: claude
@@ -147,6 +147,11 @@ panes:
   - For projects with a `CLAUDE.md` file: Opens `claude` in the first pane
   - For all other projects: Opens your default shell (`$SHELL`)
   - Both configurations include a second pane split horizontally
+- If no `post_create` configuration is defined, workmux automatically detects
+  your package manager and runs the appropriate install command:
+  - For pnpm projects (detects `pnpm-lock.yaml`): Runs `pnpm install`
+  - To disable: Set `post_create: []` in your config
+  - To override: Define custom `post_create` commands
 
 ### Shell alias (recommended)
 
@@ -181,7 +186,8 @@ immediately. If the branch doesn't exist, it will be created automatically.
    `<project_root>/../<project_name>__worktrees/<branch-name>`
 2. Creates a new tmux window named after the branch
 3. Runs any configured file operations (copy/symlink)
-4. Executes `post_create` commands if defined in config
+4. Executes `post_create` commands if defined in config, or automatically runs
+   `pnpm install` for pnpm projects (when `pnpm-lock.yaml` is detected)
 5. Sets up your configured tmux pane layout
 6. Automatically switches your tmux client to the new window
 

@@ -188,6 +188,7 @@ fn setup_environment(
     options: &SetupOptions,
 ) -> Result<CreateResult> {
     let prefix = config.window_prefix();
+    let repo_root = git::get_repo_root()?;
 
     // Create tmux window
     tmux::create_window(prefix, branch_name, worktree_path)
@@ -195,7 +196,6 @@ fn setup_environment(
 
     // Perform file operations (copy and symlink) if forced
     if options.force_files {
-        let repo_root = git::get_repo_root()?;
         handle_file_operations(&repo_root, worktree_path, &config.files)
             .context("Failed to perform file operations")?;
     }
@@ -205,6 +205,15 @@ fn setup_environment(
     if options.run_hooks {
         if let Some(post_create) = &config.post_create {
             if !post_create.is_empty() {
+                // Print detection message for pnpm projects
+                if repo_root.join("pnpm-lock.yaml").exists()
+                    && post_create
+                        .iter()
+                        .any(|cmd| cmd.starts_with("pnpm install"))
+                {
+                    println!("  Detected pnpm project, installing dependencies...");
+                }
+
                 hooks_run = post_create.len();
                 for (idx, command) in post_create.iter().enumerate() {
                     println!("  [{}/{}] Running: {}", idx + 1, hooks_run, command);

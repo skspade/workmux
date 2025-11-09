@@ -73,24 +73,37 @@ impl Config {
         let global_config = Self::load_global()?.unwrap_or_default();
         let project_config = Self::load_project()?.unwrap_or_default();
 
-        let merged_config = global_config.merge(project_config);
+        let mut config = global_config.merge(project_config);
 
-        // After merging, if no panes are defined, apply a sensible default.
-        if merged_config.panes.is_none() {
-            let mut final_config = merged_config;
+        // After merging, apply sensible defaults for any values that are not configured.
+        let needs_defaults = config.panes.is_none() || config.post_create.is_none();
+
+        if needs_defaults {
             if let Ok(repo_root) = git::get_repo_root() {
-                if repo_root.join("CLAUDE.md").exists() {
-                    final_config.panes = Some(Self::claude_default_panes());
-                } else {
-                    final_config.panes = Some(Self::default_panes());
+                // Apply defaults that require inspecting the repository.
+
+                // Default panes based on project type
+                if config.panes.is_none() {
+                    if repo_root.join("CLAUDE.md").exists() {
+                        config.panes = Some(Self::claude_default_panes());
+                    } else {
+                        config.panes = Some(Self::default_panes());
+                    }
+                }
+
+                // Default post_create hooks based on package manager
+                if config.post_create.is_none() && repo_root.join("pnpm-lock.yaml").exists() {
+                    config.post_create = Some(vec!["pnpm install".to_string()]);
                 }
             } else {
-                final_config.panes = Some(Self::default_panes());
+                // Apply fallback defaults for when not in a git repo (e.g., `workmux init`).
+                if config.panes.is_none() {
+                    config.panes = Some(Self::default_panes());
+                }
             }
-            Ok(final_config)
-        } else {
-            Ok(merged_config)
         }
+
+        Ok(config)
     }
 
     /// Load configuration from a specific path.
