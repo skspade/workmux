@@ -232,14 +232,6 @@ fn setup_environment(
     let prefix = config.window_prefix();
     let repo_root = git::get_repo_root()?;
 
-    // Create tmux window
-    tmux::create_window(prefix, branch_name, worktree_path)
-        .context("Failed to create tmux window")?;
-    info!(
-        branch = branch_name,
-        "setup_environment:tmux window created"
-    );
-
     // Perform file operations (copy and symlink) if forced
     if options.force_files {
         handle_file_operations(&repo_root, worktree_path, &config.files)
@@ -250,7 +242,7 @@ fn setup_environment(
         );
     }
 
-    // Run post-create hooks if enabled
+    // Run post-create hooks before opening tmux so the new window appears "ready"
     let mut hooks_run = 0;
     if options.run_hooks
         && let Some(post_create) = &config.post_create
@@ -279,6 +271,14 @@ fn setup_environment(
             "setup_environment:hooks complete"
         );
     }
+
+    // Create tmux window once prep work is finished
+    tmux::create_window(prefix, branch_name, worktree_path)
+        .context("Failed to create tmux window")?;
+    info!(
+        branch = branch_name,
+        "setup_environment:tmux window created"
+    );
 
     // Setup panes
     let panes = config.panes.as_deref().unwrap_or(&[]);
