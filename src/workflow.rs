@@ -599,7 +599,35 @@ pub fn remove(
         .with_context(|| format!("No worktree found for branch '{}'", branch_name))?;
     debug!(branch = branch_name, path = %worktree_path.display(), "remove:worktree resolved");
 
-    // Safety Check: Prevent deleting the main branch
+    // Safety Check: Prevent deleting the main worktree itself, regardless of branch.
+    let main_worktree_path = git::get_main_worktree_root()
+        .context("Failed to locate the main worktree for safety check")?;
+
+    // Canonicalize paths for robust comparison (handles symlinks, trailing slashes, etc.)
+    let canonical_main_path = main_worktree_path.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize main worktree path: {}",
+            main_worktree_path.display()
+        )
+    })?;
+    let canonical_worktree_path = worktree_path.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize worktree path: {}",
+            worktree_path.display()
+        )
+    })?;
+
+    if canonical_worktree_path == canonical_main_path {
+        return Err(anyhow!(
+            "Cannot remove branch '{}' because it is checked out in the main worktree at '{}'. \
+            Switch the main worktree to a different branch first, or create a linked worktree for '{}'.",
+            branch_name,
+            main_worktree_path.display(),
+            branch_name
+        ));
+    }
+
+    // Safety Check: Prevent deleting the main branch by name (secondary check)
     let main_branch = git::get_default_branch()
         .context("Failed to determine the main branch. You can specify it in .workmux.yaml")?;
     if branch_name == main_branch {
@@ -653,14 +681,20 @@ pub fn cleanup(
         delete_remote,
         "cleanup:start"
     );
-    // Change the CWD to a safe location (main worktree root) before any destructive
+    // Change the CWD to a safe location (parent of main worktree) before any destructive
     // operations. This prevents "Unable to read current working directory" errors
     // when the command is run from within the worktree being deleted.
     let main_worktree_root = git::get_main_worktree_root()
         .context("Could not find main worktree to run cleanup operations")?;
-    debug!(root = %main_worktree_root.display(), "cleanup:main root resolved");
-    std::env::set_current_dir(&main_worktree_root)
-        .context("Could not change directory to main worktree root")?;
+    let safe_cwd = main_worktree_root.parent().ok_or_else(|| {
+        anyhow!(
+            "Could not determine parent directory of main worktree '{}'",
+            main_worktree_root.display()
+        )
+    })?;
+    debug!(safe_cwd = %safe_cwd.display(), "cleanup:changing to safe CWD");
+    std::env::set_current_dir(safe_cwd)
+        .with_context(|| format!("Could not change directory to '{}'", safe_cwd.display()))?;
 
     let tmux_running = tmux::is_running().unwrap_or(false);
     let running_inside_target_window = if tmux_running {
