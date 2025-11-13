@@ -36,11 +36,15 @@ run *ARGS:
     cargo run -- "$@"
 
 # Run Python tests (depends on build)
-test: build
+test *ARGS: build
     #!/usr/bin/env bash
     set -euo pipefail
     source tests/venv/bin/activate
-    pytest tests/ -v
+    if [ $# -eq 0 ]; then
+        pytest tests/ -v
+    else
+        pytest "$@"
+    fi
 
 # Release a new patch version
 release-patch:
