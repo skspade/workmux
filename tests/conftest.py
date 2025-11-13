@@ -47,6 +47,19 @@ class TmuxEnvironment:
         # Prevent tmux from loading the user's real ~/.tmux.conf file
         self.env["TMUX_CONF"] = "/dev/null"
 
+        # Create a fake git editor for non-interactive commits
+        # Git needs the commit message file to be modified, so we ensure it has content
+        fake_editor_script = self.home_path / "fake_git_editor.sh"
+        fake_editor_script.write_text(
+            "#!/bin/sh\n"
+            "# If the file is empty or only has comments, add a default message\n"
+            'if ! grep -q "^[^#]" "$1" 2>/dev/null; then\n'
+            '  echo "Test commit" > "$1"\n'
+            "fi\n"
+        )
+        fake_editor_script.chmod(0o755)
+        self.env["GIT_EDITOR"] = str(fake_editor_script)
+
     def run_command(
         self, cmd: list[str], check: bool = True, cwd: Optional[Path] = None
     ):
@@ -102,14 +115,44 @@ def isolated_tmux_server(tmp_path: Path) -> Generator[TmuxEnvironment, None, Non
         test_env.socket_path.unlink()
 
 
-def setup_git_repo(path: Path):
+def setup_git_repo(path: Path, env_vars: Optional[dict] = None):
     """Initializes a git repository in the given path with an initial commit."""
-    subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init"], cwd=path, check=True, capture_output=True, env=env_vars
+    )
+    # Configure git user for commits
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        env=env_vars,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        env=env_vars,
+    )
+    # Ignore test_home directory and test output files to prevent uncommitted changes
+    gitignore_path = path / ".gitignore"
+    gitignore_path.write_text(
+        "test_home/\nworkmux_*.txt\n"  # Test helper output files
+    )
+    subprocess.run(
+        ["git", "add", ".gitignore"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        env=env_vars,
+    )
     subprocess.run(
         ["git", "commit", "--allow-empty", "-m", "Initial commit"],
         cwd=path,
         check=True,
         capture_output=True,
+        env=env_vars,
     )
 
 
@@ -117,8 +160,19 @@ def setup_git_repo(path: Path):
 def repo_path(isolated_tmux_server: "TmuxEnvironment") -> Path:
     """Initializes a git repo in the test env and returns its path."""
     path = isolated_tmux_server.tmp_path
-    setup_git_repo(path)
+    setup_git_repo(path, isolated_tmux_server.env)
     return path
+
+
+@pytest.fixture
+def remote_repo_path(isolated_tmux_server: "TmuxEnvironment") -> Path:
+    """Creates a bare git repo to act as a remote."""
+    remote_path = isolated_tmux_server.tmp_path / "remote_repo.git"
+    remote_path.mkdir()
+    subprocess.run(
+        ["git", "init", "--bare"], cwd=remote_path, check=True, capture_output=True
+    )
+    return remote_path
 
 
 def poll_until(
@@ -160,12 +214,25 @@ def write_workmux_config(
     repo_path: Path,
     panes: Optional[List[Dict[str, Any]]] = None,
     post_create: Optional[List[str]] = None,
+    env: Optional[TmuxEnvironment] = None,
 ):
-    """Creates a .workmux.yaml file from structured data."""
+    """Creates a .workmux.yaml file from structured data and optionally commits it."""
     config: Dict[str, Any] = {"panes": panes if panes is not None else []}
     if post_create:
         config["post_create"] = post_create
     (repo_path / ".workmux.yaml").write_text(yaml.dump(config))
+
+    # If env is provided, commit the config file to avoid uncommitted changes in merge tests
+    if env:
+        subprocess.run(
+            ["git", "add", ".workmux.yaml"], cwd=repo_path, check=True, env=env.env
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add workmux config"],
+            cwd=repo_path,
+            check=True,
+            env=env.env,
+        )
 
 
 def get_worktree_path(repo_path: Path, branch_name: str) -> Path:
@@ -262,9 +329,8 @@ def create_commit(env: TmuxEnvironment, path: Path, message: str):
     (path / f"file_for_{message.replace(' ', '_').replace(':', '')}.txt").write_text(
         f"content for {message}"
     )
-    # Use subprocess directly to specify cwd easily
-    subprocess.run(["git", "add", "."], cwd=path, check=True, env=env.env)
-    subprocess.run(["git", "commit", "-m", message], cwd=path, check=True, env=env.env)
+    env.run_command(["git", "add", "."], cwd=path)
+    env.run_command(["git", "commit", "-m", message], cwd=path)
 
 
 def create_dirty_file(path: Path, filename: str = "dirty.txt"):
@@ -349,4 +415,90 @@ def run_workmux_remove(
         if exit_code != 0:
             raise AssertionError(
                 f"workmux remove failed with exit code {exit_code}\nStderr:\n{stderr}"
+            )
+
+
+def run_workmux_merge(
+    env: TmuxEnvironment,
+    workmux_exe_path: Path,
+    repo_path: Path,
+    branch_name: Optional[str] = None,
+    ignore_uncommitted: bool = False,
+    delete_remote: bool = False,
+    rebase: bool = False,
+    squash: bool = False,
+    expect_fail: bool = False,
+    from_window: Optional[str] = None,
+) -> None:
+    """
+    Helper to run `workmux merge` command inside the isolated tmux session.
+
+    Uses tmux run-shell -b to avoid hanging when merge kills its own window.
+    Asserts that the command completes successfully unless expect_fail is True.
+
+    Args:
+        env: The isolated tmux environment
+        workmux_exe_path: Path to the workmux executable
+        repo_path: Path to the git repository
+        branch_name: Optional name of the branch to merge (omit to auto-detect from current branch)
+        ignore_uncommitted: Whether to use --ignore-uncommitted flag
+        delete_remote: Whether to use --delete-remote flag
+        rebase: Whether to use --rebase flag
+        squash: Whether to use --squash flag
+        expect_fail: If True, asserts the command fails (non-zero exit code)
+        from_window: Optional tmux window name to run the command from
+    """
+    stdout_file = env.tmp_path / "workmux_merge_stdout.txt"
+    stderr_file = env.tmp_path / "workmux_merge_stderr.txt"
+    exit_code_file = env.tmp_path / "workmux_merge_exit_code.txt"
+
+    for f in [stdout_file, stderr_file, exit_code_file]:
+        if f.exists():
+            f.unlink()
+
+    flags = []
+    if ignore_uncommitted:
+        flags.append("--ignore-uncommitted")
+    if delete_remote:
+        flags.append("--delete-remote")
+    if rebase:
+        flags.append("--rebase")
+    if squash:
+        flags.append("--squash")
+
+    branch_arg = branch_name if branch_name else ""
+    flags_str = " ".join(flags)
+
+    if from_window:
+        from_branch = from_window.replace("wm-", "")
+        worktree_path = get_worktree_path(repo_path, from_branch)
+        script_dir = worktree_path
+    else:
+        script_dir = repo_path
+
+    merge_script = (
+        f"cd {script_dir} && "
+        f"{workmux_exe_path} merge {flags_str} {branch_arg} "
+        f"> {stdout_file} 2> {stderr_file}; "
+        f"echo $? > {exit_code_file}"
+    )
+
+    env.tmux(["run-shell", "-b", merge_script])
+
+    assert poll_until(exit_code_file.exists, timeout=10.0), (
+        "workmux merge did not complete in time"
+    )
+
+    exit_code = int(exit_code_file.read_text().strip())
+    stderr = stderr_file.read_text() if stderr_file.exists() else ""
+
+    if expect_fail:
+        if exit_code == 0:
+            raise AssertionError(
+                f"workmux merge was expected to fail but succeeded.\nStderr:\n{stderr}"
+            )
+    else:
+        if exit_code != 0:
+            raise AssertionError(
+                f"workmux merge failed with exit code {exit_code}\nStderr:\n{stderr}"
             )
