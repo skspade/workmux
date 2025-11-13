@@ -222,7 +222,7 @@ def write_workmux_config(
     repo_path: Path,
     panes: Optional[List[Dict[str, Any]]] = None,
     post_create: Optional[List[str]] = None,
-    files: Optional[Dict[str, Any]] = None,
+    files: Optional[Dict[str, List[str]]] = None,
     env: Optional[TmuxEnvironment] = None,
 ):
     """Creates a .workmux.yaml file from structured data and optionally commits it."""

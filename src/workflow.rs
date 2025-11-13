@@ -321,12 +321,33 @@ fn handle_file_operations(
         symlink_patterns = file_config.symlink.as_ref().map(|v| v.len()).unwrap_or(0),
         "file_operations:start"
     );
+
+    let canon_repo_root = repo_root.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize repository root path: {:?}",
+            repo_root
+        )
+    })?;
+
     // Handle copies
     if let Some(copy_patterns) = &file_config.copy {
         for pattern in copy_patterns {
             let full_pattern = repo_root.join(pattern).to_string_lossy().to_string();
             for entry in glob::glob(&full_pattern)? {
                 let source_path = entry?;
+
+                // Validate that the resolved source path is within the repository root
+                let canon_source_path = source_path.canonicalize().with_context(|| {
+                    format!("Failed to canonicalize source path: {:?}", source_path)
+                })?;
+                if !canon_source_path.starts_with(&canon_repo_root) {
+                    return Err(anyhow!(
+                        "Path traversal detected for copy pattern '{}'. The resolved path '{}' is outside the repository root.",
+                        pattern,
+                        source_path.display()
+                    ));
+                }
+
                 if source_path.is_dir() {
                     return Err(anyhow!(
                         "Cannot copy directory '{}'. Only files are supported for copy operations. \
@@ -360,6 +381,19 @@ fn handle_file_operations(
             let full_pattern = repo_root.join(pattern).to_string_lossy().to_string();
             for entry in glob::glob(&full_pattern)? {
                 let source_path = entry?;
+
+                // Validate that the resolved source path is within the repository root
+                let canon_source_path = source_path.canonicalize().with_context(|| {
+                    format!("Failed to canonicalize source path: {:?}", source_path)
+                })?;
+                if !canon_source_path.starts_with(&canon_repo_root) {
+                    return Err(anyhow!(
+                        "Path traversal detected for symlink pattern '{}'. The resolved path '{}' is outside the repository root.",
+                        pattern,
+                        source_path.display()
+                    ));
+                }
+
                 let relative_path = source_path.strip_prefix(repo_root)?;
                 let dest_path = worktree_path.join(relative_path);
 

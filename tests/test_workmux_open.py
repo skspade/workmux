@@ -33,7 +33,9 @@ def test_open_recreates_tmux_window_for_existing_worktree(
 
     run_workmux_open(env, workmux_exe_path, repo_path, branch_name)
 
-    list_windows = env.tmux(["list-windows", "-F", "#{window_name}"]).stdout.splitlines()
+    list_windows = env.tmux(
+        ["list-windows", "-F", "#{window_name}"]
+    ).stdout.splitlines()
     assert window_name in list_windows
 
 
