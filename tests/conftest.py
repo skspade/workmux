@@ -40,10 +40,6 @@ class TmuxEnvironment:
         # and other side effects from user's shell configuration
         self.env["HOME"] = str(self.home_path)
 
-        # IMPORTANT: Tell all future tmux commands to use our private socket.
-        # This is the key to isolating the test from the user's live tmux session.
-        self.env["TMUX_SOCKET"] = str(self.socket_path)
-
         # Prevent tmux from loading the user's real ~/.tmux.conf file
         self.env["TMUX_CONF"] = "/dev/null"
 
