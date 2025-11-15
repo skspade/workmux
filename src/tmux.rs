@@ -354,8 +354,8 @@ fn rewrite_agent_command(command: &str, prompt_file: &Path, working_dir: &Path) 
 
     let rewritten = match agent_name {
         Some("claude") | Some("codex") => {
-            // Pass the prompt file using @ syntax
-            let mut cmd = format!("{} @{}", first_token, prompt_path);
+            // Use command substitution to pass prompt content directly
+            let mut cmd = format!("{} \"$(cat {})\"", first_token, prompt_path);
             if !rest.is_empty() {
                 cmd.push(' ');
                 cmd.push_str(rest);
@@ -364,7 +364,7 @@ fn rewrite_agent_command(command: &str, prompt_file: &Path, working_dir: &Path) 
         }
         Some("gemini") => {
             // gemini needs -i flag for interactive mode after prompt
-            let mut cmd = format!("{} -i @{}", first_token, prompt_path);
+            let mut cmd = format!("{} -i \"$(cat {})\"", first_token, prompt_path);
             if !rest.is_empty() {
                 cmd.push(' ');
                 cmd.push_str(rest);
@@ -402,7 +402,7 @@ mod tests {
         let working_dir = PathBuf::from("/tmp/worktree");
 
         let result = rewrite_agent_command("claude", &prompt_file, &working_dir);
-        assert_eq!(result, Some("claude @PROMPT.md".to_string()));
+        assert_eq!(result, Some("claude \"$(cat PROMPT.md)\"".to_string()));
     }
 
     #[test]
@@ -411,7 +411,7 @@ mod tests {
         let working_dir = PathBuf::from("/tmp/worktree");
 
         let result = rewrite_agent_command("codex", &prompt_file, &working_dir);
-        assert_eq!(result, Some("codex @PROMPT.md".to_string()));
+        assert_eq!(result, Some("codex \"$(cat PROMPT.md)\"".to_string()));
     }
 
     #[test]
@@ -420,7 +420,7 @@ mod tests {
         let working_dir = PathBuf::from("/tmp/worktree");
 
         let result = rewrite_agent_command("gemini", &prompt_file, &working_dir);
-        assert_eq!(result, Some("gemini -i @PROMPT.md".to_string()));
+        assert_eq!(result, Some("gemini -i \"$(cat PROMPT.md)\"".to_string()));
     }
 
     #[test]
@@ -429,7 +429,10 @@ mod tests {
         let working_dir = PathBuf::from("/tmp/worktree");
 
         let result = rewrite_agent_command("/usr/local/bin/claude", &prompt_file, &working_dir);
-        assert_eq!(result, Some("/usr/local/bin/claude @PROMPT.md".to_string()));
+        assert_eq!(
+            result,
+            Some("/usr/local/bin/claude \"$(cat PROMPT.md)\"".to_string())
+        );
     }
 
     #[test]
@@ -438,7 +441,10 @@ mod tests {
         let working_dir = PathBuf::from("/tmp/worktree");
 
         let result = rewrite_agent_command("claude --verbose", &prompt_file, &working_dir);
-        assert_eq!(result, Some("claude @PROMPT.md --verbose".to_string()));
+        assert_eq!(
+            result,
+            Some("claude \"$(cat PROMPT.md)\" --verbose".to_string())
+        );
     }
 
     #[test]

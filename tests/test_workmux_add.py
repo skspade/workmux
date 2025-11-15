@@ -72,7 +72,7 @@ def test_add_creates_tmux_window(
 def test_add_inline_prompt_injects_into_claude(
     isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Inline prompts should be written to PROMPT.md and passed to claude using @ syntax."""
+    """Inline prompts should be written to PROMPT.md and passed to claude via command substitution."""
     env = isolated_tmux_server
     branch_name = "feature-inline-prompt"
     prompt_text = "Implement inline prompt"
@@ -88,12 +88,9 @@ echo "ARG1: $1" >> debug_args.txt
 echo "ARG2: $2" >> debug_args.txt
 
 set -e
-# The implementation calls: claude @PROMPT.md
-if [ "$1" != "@PROMPT.md" ]; then
-    echo "Expected @PROMPT.md as first arg, got: $1" >&2
-    exit 1
-fi
-cat PROMPT.md > "{output_filename}"
+# The implementation calls: claude "$(cat PROMPT.md)"
+# So we expect the prompt content as the first argument
+printf '%s' "$1" > "{output_filename}"
 """,
     )
 
@@ -140,7 +137,7 @@ cat PROMPT.md > "{output_filename}"
 def test_add_prompt_file_injects_into_gemini(
     isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Prompt file flag should populate PROMPT.md and pass it to gemini using @ syntax."""
+    """Prompt file flag should populate PROMPT.md and pass it to gemini via command substitution."""
     env = isolated_tmux_server
     branch_name = "feature-file-prompt"
     prompt_source = repo_path / "prompt_source.txt"
@@ -152,16 +149,13 @@ def test_add_prompt_file_injects_into_gemini(
         "gemini",
         f"""#!/bin/sh
 set -e
-# The implementation calls: gemini -i @PROMPT.md
+# The implementation calls: gemini -i "$(cat PROMPT.md)"
+# So we expect -i flag first, then the prompt content as the second argument
 if [ "$1" != "-i" ]; then
     echo "Expected -i flag first" >&2
     exit 1
 fi
-if [ "$2" != "@PROMPT.md" ]; then
-    echo "Expected @PROMPT.md as second arg, got: $2" >&2
-    exit 1
-fi
-cat PROMPT.md > "{output_filename}"
+printf '%s' "$2" > "{output_filename}"
 """,
     )
 
