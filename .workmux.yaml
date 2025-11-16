@@ -1,0 +1,12 @@
+panes:
+  - command: <agent>
+    focus: true
+  - split: horizontal
+
+post_create:
+  - python -m venv tests/venv
+  - source tests/venv/bin/activate && pip install --disable-pip-version-check -r tests/requirements.txt
+
+files:
+  symlink:
+    - CLAUDE.md
