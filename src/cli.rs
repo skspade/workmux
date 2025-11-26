@@ -132,6 +132,10 @@ enum Commands {
         #[arg(value_parser = WorktreeBranchParser::new())]
         branch_name: Option<String>,
 
+        /// Target branch to merge into (defaults to main branch)
+        #[arg(long)]
+        target: Option<String>,
+
         /// Ignore uncommitted and staged changes
         #[arg(long)]
         ignore_uncommitted: bool,
@@ -140,11 +144,11 @@ enum Commands {
         #[arg(short = 'r', long)]
         delete_remote: bool,
 
-        /// Rebase the branch onto the main branch before merging (fast-forward)
+        /// Rebase the branch onto the target branch before merging (fast-forward)
         #[arg(long, group = "merge_strategy")]
         rebase: bool,
 
-        /// Squash all commits from the branch into a single commit on the main branch
+        /// Squash all commits from the branch into a single commit on the target branch
         #[arg(long, group = "merge_strategy")]
         squash: bool,
 
@@ -229,6 +233,7 @@ pub fn run() -> Result<()> {
         } => command::open::run(&branch_name, run_hooks, force_files),
         Commands::Merge {
             branch_name,
+            target,
             ignore_uncommitted,
             delete_remote,
             rebase,
@@ -241,6 +246,7 @@ pub fn run() -> Result<()> {
             rebase,
             squash,
             keep,
+            target.as_deref(),
         ),
         Commands::Remove {
             branch_name,

@@ -552,6 +552,7 @@ def run_workmux_merge(
     workmux_exe_path: Path,
     repo_path: Path,
     branch_name: Optional[str] = None,
+    target: Optional[str] = None,
     ignore_uncommitted: bool = False,
     delete_remote: bool = False,
     rebase: bool = False,
@@ -571,6 +572,7 @@ def run_workmux_merge(
         workmux_exe_path: Path to the workmux executable
         repo_path: Path to the git repository
         branch_name: Optional name of the branch to merge (omit to auto-detect from current branch)
+        target: Optional target branch to merge into (defaults to main branch)
         ignore_uncommitted: Whether to use --ignore-uncommitted flag
         delete_remote: Whether to use --delete-remote flag
         rebase: Whether to use --rebase flag
@@ -588,6 +590,8 @@ def run_workmux_merge(
             f.unlink()
 
     flags = []
+    if target:
+        flags.append(f"--target {target}")
     if ignore_uncommitted:
         flags.append("--ignore-uncommitted")
     if delete_remote:

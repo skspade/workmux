@@ -9,6 +9,7 @@ pub fn run(
     rebase: bool,
     squash: bool,
     keep: bool,
+    target_branch: Option<&str>,
 ) -> Result<()> {
     let config = config::Config::load(None)?;
 
@@ -17,6 +18,9 @@ pub fn run(
     let branch_to_merge = super::resolve_branch(branch_name, "merge")?;
 
     let context = WorkflowContext::new(config)?;
+
+    // Resolve target branch: use provided value or default to main branch
+    let target = target_branch.unwrap_or(&context.main_branch);
 
     // Only announce pre-delete hooks if we're actually going to run cleanup
     if !keep {
@@ -30,6 +34,7 @@ pub fn run(
         rebase,
         squash,
         keep,
+        target,
         &context,
     )
     .context("Failed to merge worktree")?;
@@ -40,7 +45,7 @@ pub fn run(
 
     println!(
         "Merging '{}' into '{}'...",
-        result.branch_merged, result.main_branch
+        result.branch_merged, result.merge_target
     );
     println!("✓ Merged '{}'", result.branch_merged);
 

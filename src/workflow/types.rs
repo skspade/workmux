@@ -11,7 +11,7 @@ pub struct CreateResult {
 /// Result of merging a worktree
 pub struct MergeResult {
     pub branch_merged: String,
-    pub main_branch: String,
+    pub merge_target: String,
     pub had_staged_changes: bool,
 }
 
