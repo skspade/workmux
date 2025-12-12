@@ -8,7 +8,7 @@ mod github;
 mod logger;
 mod prompt;
 mod template;
-mod tmux;
+mod zellij;
 mod workflow;
 
 use anyhow::Result;

@@ -5,8 +5,8 @@ Tests for PR checkout functionality (workmux add --pr <number>)
 from pathlib import Path
 
 from .conftest import (
-    TmuxEnvironment,
-    get_window_name,
+    ZellijEnvironment,
+    get_tab_name,
     get_worktree_path,
     install_fake_gh_cli,
     run_workmux_command,
@@ -15,7 +15,7 @@ from .conftest import (
 
 
 def setup_pr_remote_and_branch(
-    env: TmuxEnvironment,
+    env: ZellijEnvironment,
     repo_path: Path,
     remote_repo_path: Path,
     branch_name: str,
@@ -81,9 +81,8 @@ def test_add_pr_from_same_repo(
     worktree_path = get_worktree_path(repo_path, "feature-branch")
     assert worktree_path.exists()
 
-    window_name = get_window_name("feature-branch")
-    windows_result = env.tmux(["list-windows", "-t", "test"], check=False)
-    assert window_name in windows_result.stdout
+    tab_name = get_tab_name("feature-branch")
+    assert env.tab_exists(tab_name)
 
 
 def test_add_pr_with_custom_branch_name(
@@ -115,9 +114,8 @@ def test_add_pr_with_custom_branch_name(
     worktree_path = get_worktree_path(repo_path, "my-review")
     assert worktree_path.exists()
 
-    window_name = get_window_name("my-review")
-    windows_result = env.tmux(["list-windows", "-t", "test"], check=False)
-    assert window_name in windows_result.stdout
+    tab_name = get_tab_name("my-review")
+    assert env.tab_exists(tab_name)
 
 
 def test_add_pr_merged_state_warning(

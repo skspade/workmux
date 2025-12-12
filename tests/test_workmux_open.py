@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from .conftest import (
-    TmuxEnvironment,
-    get_window_name,
+    ZellijEnvironment,
+    get_tab_name,
     get_worktree_path,
     run_workmux_add,
     run_workmux_open,
@@ -10,41 +10,37 @@ from .conftest import (
 )
 
 
-def _kill_window(env: TmuxEnvironment, branch_name: str) -> None:
-    """Helper to close the tmux window for a branch if it exists."""
-    window_name = get_window_name(branch_name)
-    env.tmux(["has-session", "-t", window_name], check=False)
-    env.tmux(["kill-window", "-t", window_name], check=False)
+def _close_tab(env: ZellijEnvironment, branch_name: str) -> None:
+    """Helper to close the zellij tab for a branch if it exists."""
+    tab_name = get_tab_name(branch_name)
+    env.close_tab(tab_name)
 
 
-def test_open_recreates_tmux_window_for_existing_worktree(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+def test_open_recreates_zellij_tab_for_existing_worktree(
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux open` recreates a tmux window for an existing worktree."""
+    """Verifies `workmux open` recreates a zellij tab for an existing worktree."""
     env = isolated_tmux_server
     branch_name = "feature-open-success"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
 
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
-    # Close the original window to simulate a detached worktree
-    env.tmux(["kill-window", "-t", window_name])
+    # Close the original tab to simulate a detached worktree
+    env.close_tab(tab_name)
 
     run_workmux_open(env, workmux_exe_path, repo_path, branch_name)
 
-    list_windows = env.tmux(
-        ["list-windows", "-F", "#{window_name}"]
-    ).stdout.splitlines()
-    assert window_name in list_windows
+    assert env.tab_exists(tab_name)
 
 
-def test_open_fails_when_window_already_exists(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+def test_open_fails_when_tab_already_exists(
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux open` fails when the tmux window already exists."""
+    """Verifies `workmux open` fails when the zellij tab already exists."""
     env = isolated_tmux_server
-    branch_name = "feature-open-window-exists"
+    branch_name = "feature-open-tab-exists"
 
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
@@ -57,11 +53,11 @@ def test_open_fails_when_window_already_exists(
         expect_fail=True,
     )
 
-    assert "window named" in result.stderr
+    assert "tab named" in result.stderr
 
 
 def test_open_fails_when_worktree_missing(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux open` fails if the worktree does not exist."""
     env = isolated_tmux_server
@@ -81,7 +77,7 @@ def test_open_fails_when_worktree_missing(
 
 
 def test_open_with_run_hooks_reexecutes_post_create_commands(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux open --run-hooks` re-runs post_create hooks."""
     env = isolated_tmux_server
@@ -95,7 +91,7 @@ def test_open_with_run_hooks_reexecutes_post_create_commands(
     hook_path = worktree_path / hook_file
     hook_path.unlink()
 
-    _kill_window(env, branch_name)
+    _close_tab(env, branch_name)
 
     run_workmux_open(
         env,
@@ -109,7 +105,7 @@ def test_open_with_run_hooks_reexecutes_post_create_commands(
 
 
 def test_open_with_force_files_reapplies_file_operations(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux open --force-files` reapplies copy operations."""
     env = isolated_tmux_server
@@ -124,7 +120,7 @@ def test_open_with_force_files_reapplies_file_operations(
     worktree_file = worktree_path / "shared.env"
     worktree_file.unlink()
 
-    _kill_window(env, branch_name)
+    _close_tab(env, branch_name)
 
     run_workmux_open(
         env,

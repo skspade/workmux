@@ -10,8 +10,8 @@ use tabled::{
 struct WorktreeRow {
     #[tabled(rename = "BRANCH")]
     branch: String,
-    #[tabled(rename = "TMUX")]
-    tmux_status: String,
+    #[tabled(rename = "ZELLIJ")]
+    zellij_status: String,
     #[tabled(rename = "UNMERGED")]
     unmerged_status: String,
     #[tabled(rename = "PATH")]
@@ -46,7 +46,7 @@ pub fn run() -> Result<()> {
             WorktreeRow {
                 branch: wt.branch,
                 path_str,
-                tmux_status: if wt.has_tmux {
+                zellij_status: if wt.has_tmux {
                     "✓".to_string()
                 } else {
                     "-".to_string()

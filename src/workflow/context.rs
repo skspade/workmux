@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::PathBuf;
 
-use crate::{config, git, tmux};
+use crate::{config, git, zellij};
 use tracing::debug;
 
 /// Shared context for workflow operations
@@ -20,7 +20,7 @@ impl WorkflowContext {
     /// Create a new workflow context
     ///
     /// Performs the git repository check and gathers all commonly needed data.
-    /// Does NOT check if tmux is running or change the current directory - those
+    /// Does NOT check if zellij is running or change the current directory - those
     /// are optional operations that can be performed via helper methods.
     pub fn new(config: config::Config) -> Result<Self> {
         if !git::is_git_repo()? {
@@ -57,13 +57,13 @@ impl WorkflowContext {
         })
     }
 
-    /// Ensure tmux is running, returning an error if not
+    /// Ensure zellij is running, returning an error if not
     ///
-    /// Call this at the start of workflows that require tmux.
-    pub fn ensure_tmux_running(&self) -> Result<()> {
-        if !tmux::is_running()? {
+    /// Call this at the start of workflows that require zellij.
+    pub fn ensure_zellij_running(&self) -> Result<()> {
+        if !zellij::is_running()? {
             return Err(anyhow!(
-                "tmux is not running. Please start a tmux session first."
+                "zellij is not running. Please start a zellij session first."
             ));
         }
         Ok(())

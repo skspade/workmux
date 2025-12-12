@@ -6,13 +6,13 @@
 </p>
 
 <p align="center">
-  <strong>Git worktrees + tmux windows</strong>
+  <strong>Git worktrees + zellij tabs</strong>
 </p>
 
 ---
 
 Giga opinionated zero-friction workflow tool for managing
-[git worktrees](https://git-scm.com/docs/git-worktree) and tmux windows as
+[git worktrees](https://git-scm.com/docs/git-worktree) and zellij tabs as
 isolated development environments.
 
 Perfect for running multiple AI agents in parallel without conflict. See also:
@@ -22,28 +22,26 @@ Perfect for running multiple AI agents in parallel without conflict. See also:
 
 ## Philosophy
 
-- **One worktree, one tmux window**: Each git worktree gets its own dedicated,
-  pre-configured tmux window.
+- **One worktree, one zellij tab**: Each git worktree gets its own dedicated
+  zellij tab.
 - **Frictionless**: Multi-step workflows are reduced to simple commands.
-- **Configuration as code**: Define your tmux layout and setup steps in
-  `.workmux.yaml`.
+- **Configuration as code**: Define your setup steps in `.workmux.yaml`.
 
-The core principle is that **tmux is the interface**. If you already live in
-tmux, you shouldn't need to learn a new TUI app or separate interface to manage
+The core principle is that **zellij is the interface**. If you already live in
+zellij, you shouldn't need to learn a new TUI app or separate interface to manage
 your work. With workmux, managing parallel development tasks, or multiple AI
-agents, is as simple as managing tmux windows.
+agents, is as simple as managing zellij tabs.
 
 ## Features
 
-- Create git worktrees with matching tmux windows in a single command (`add`)
-- Automatically set up your preferred pane layout (editor, shell, watchers,
-  etc.)
+- Create git worktrees with matching zellij tabs in a single command (`add`)
+- Run commands in your new worktree tab automatically
 - Run post-creation hooks (install dependencies, setup database, etc.)
 - Copy or symlink configuration files (`.env`, `node_modules`) into new
   worktrees
-- Merge branches and clean up everything (worktree, tmux window, branches) in
+- Merge branches and clean up everything (worktree, zellij tab, branches) in
   one command (`merge`)
-- List all worktrees with their tmux and merge status
+- List all worktrees with their zellij and merge status
 - Bootstrap projects with an initial configuration file (`init`)
 - Dynamic shell completions for branch names
 
@@ -77,7 +75,7 @@ This creates a `.workmux.yaml` file to customize your workflow (pane layouts,
 setup commands, file operations, etc.). workmux works out of the box with
 sensible defaults, so this step is optional.
 
-2. **Create a new worktree and tmux window**:
+2. **Create a new worktree and zellij tab**:
 
 ```bash
 workmux add new-feature
@@ -87,8 +85,8 @@ This will:
 
 - Create a git worktree at
   `<project_root>/../<project_name>__worktrees/new-feature`
-- Create a tmux window named `new-feature`
-- Automatically switch your tmux client to the new window
+- Create a zellij tab named `new-feature`
+- Automatically switch to the new tab
 
 3. **When done, merge and clean up**:
 
@@ -97,7 +95,7 @@ This will:
 workmux merge
 ```
 
-Merges your branch into main and cleans up everything (tmux window, worktree,
+Merges your branch into main and cleans up everything (zellij tab, worktree,
 and local branch).
 
 ## Configuration
@@ -168,21 +166,13 @@ For a real-world example, see
   checks for `main`/`master`)
 - `worktree_dir`: Custom directory for worktrees (absolute or relative to repo
   root)
-- `window_prefix`: Prefix for tmux window names (default: `wm-`)
-- `panes`: Array of pane configurations
-  - `command`: Optional command to run when the pane is created. Use this for
-    long-running setup like dependency installs so output is visible in tmux. If
-    omitted, the pane starts with your default shell. Use `<agent>` to use the
-    configured agent.
+- `window_prefix`: Prefix for zellij tab names (default: `wm-`)
+- `panes`: Array of pane configurations (note: zellij only uses first pane)
+  - `command`: Optional command to run when the tab is created. Use `<agent>` to
+    use the configured agent. If omitted, the tab starts with your default shell.
   - `focus`: Whether this pane should receive focus (default: false)
-  - `split`: How to split from previous pane (`horizontal` or `vertical`)
-  - `size`: Optional absolute size in lines (for vertical splits) or cells (for
-    horizontal splits). Mutually exclusive with `percentage`. If neither is
-    specified, tmux splits 50/50.
-  - `percentage`: Optional size as a percentage (1-100) of the available space.
-    Mutually exclusive with `size`. If neither is specified, tmux splits 50/50.
-- `post_create`: Commands to run after worktree creation but before the tmux
-  window opens. These block window creation, so keep them short (e.g., copying
+- `post_create`: Commands to run after worktree creation but before the zellij
+  tab opens. These block tab creation, so keep them short (e.g., copying
   config files).
 - `files`: File operations to perform on worktree creation
   - `copy`: List of glob patterns for files/directories to copy
@@ -240,19 +230,19 @@ alias wm='workmux'
 
 ## Commands
 
-- [`add`](#workmux-add-branch-name) - Create a new worktree and tmux window
+- [`add`](#workmux-add-branch-name) - Create a new worktree and zellij tab
 - [`merge`](#workmux-merge-branch-name) - Merge a branch and clean up everything
 - [`remove`](#workmux-remove-branch-name) - Remove a worktree without merging
 - [`list`](#workmux-list) - List all worktrees with status
 - [`init`](#workmux-init) - Generate configuration file
-- [`open`](#workmux-open-branch-name) - Open a tmux window for an existing
+- [`open`](#workmux-open-branch-name) - Open a zellij tab for an existing
   worktree
 - [`claude prune`](#workmux-claude-prune) - Clean up stale Claude Code entries
 - [`completions`](#workmux-completions-shell) - Generate shell completions
 
 ### `workmux add <branch-name>`
 
-Creates a new git worktree with a matching tmux window and switches you to it
+Creates a new git worktree with a matching zellij tab and switches you to it
 immediately. If the branch doesn't exist, it will be created automatically.
 
 - `<branch-name>`: Name of the branch to create or switch to, or a remote branch
@@ -271,7 +261,7 @@ immediately. If the branch doesn't exist, it will be created automatically.
   - Requires the `gh` command-line tool to be installed and authenticated.
   - The local branch name defaults to the PR's head branch name, but can be
     overridden (e.g., `workmux add custom-name --pr 123`).
-- `-b, --background`: Create the tmux window in the background without switching
+- `-b, --background`: Create the zellij tab in the background without switching
   to it. Useful with `--prompt-editor`.
 - `-w, --with-changes`: Move uncommitted changes from the current worktree to
   the new worktree, then reset the original worktree to a clean state. Useful
@@ -308,11 +298,11 @@ These options allow you to skip expensive setup steps when they're not needed
 1. Creates a git worktree at
    `<project_root>/../<project_name>__worktrees/<branch-name>`
 2. Runs any configured file operations (copy/symlink)
-3. Executes `post_create` commands if defined (runs before the tmux window
+3. Executes `post_create` commands if defined (runs before the zellij tab
    opens, so keep them fast)
-4. Creates a new tmux window named after the branch
-5. Sets up your configured tmux pane layout
-6. Automatically switches your tmux client to the new window
+4. Creates a new zellij tab named after the branch
+5. Runs your configured pane command (if any)
+6. Automatically switches to the new tab
 
 #### Examples
 
@@ -517,7 +507,7 @@ workmux add testing --prompt-file task.md
 ### `workmux merge [branch-name]`
 
 Merges a branch into the main branch and automatically cleans up all associated
-resources (worktree, tmux window, and local branch).
+resources (worktree, zellij tab, and local branch).
 
 - `[branch-name]`: Optional name of the branch to merge. If omitted,
   automatically detects the current branch from the worktree you're in.
@@ -551,7 +541,7 @@ the merge behavior with these mutually exclusive flags:
 3. Commits staged changes if present (unless `--ignore-uncommitted` is used)
 4. Merges your branch into main using the selected strategy (default: merge
    commit)
-5. Deletes the tmux window (including the one you're currently in if you ran
+5. Closes the zellij tab (including the one you're currently in if you ran
    this from a worktree) — skipped if `--keep` is used
 6. Removes the worktree — skipped if `--keep` is used
 7. Deletes the local branch — skipped if `--keep` is used
@@ -559,8 +549,8 @@ the merge behavior with these mutually exclusive flags:
 #### Typical workflow
 
 When you're done working in a worktree, simply run `workmux merge` from within
-that worktree's tmux window. The command will automatically detect which branch
-you're on, merge it into main, and close the current window as part of cleanup.
+that worktree's zellij tab. The command will automatically detect which branch
+you're on, merge it into main, and close the current tab as part of cleanup.
 
 #### Examples
 
@@ -591,7 +581,7 @@ workmux remove user-auth  # clean up later when ready
 
 ### `workmux remove <branch-name>` (alias: `rm`)
 
-Removes a worktree, tmux window, and branch without merging (unless you keep the
+Removes a worktree, zellij tab, and branch without merging (unless you keep the
 branch). Useful for abandoning work or cleaning up experimental branches.
 
 - `<branch-name>`: Name of the branch to remove.
@@ -612,7 +602,7 @@ workmux remove experiment
 # Use the alias
 workmux rm old-work
 
-# Remove worktree/window but keep the branch
+# Remove worktree/tab but keep the branch
 workmux remove --keep-branch experiment
 
 # Force remove without prompts
@@ -626,7 +616,7 @@ workmux rm -f -r old-work
 
 ### `workmux list` (alias: `ls`)
 
-Lists all git worktrees with their tmux window status and merge status.
+Lists all git worktrees with their zellij tab status and merge status.
 
 #### Examples
 
@@ -638,8 +628,8 @@ workmux list
 #### Example output
 
 ```
-BRANCH      TMUX    UNMERGED    PATH
-------      ----    --------    ----
+BRANCH      ZELLIJ  UNMERGED    PATH
+------      ------  --------    ----
 main        -       -           ~/project
 user-auth   ✓       -           ~/project__worktrees/user-auth
 bug-fix     ✓       ●           ~/project__worktrees/bug-fix
@@ -647,7 +637,7 @@ bug-fix     ✓       ●           ~/project__worktrees/bug-fix
 
 #### Key
 
-- `✓` in TMUX column = tmux window exists for this worktree
+- `✓` in ZELLIJ column = zellij tab exists for this worktree
 - `●` in UNMERGED column = branch has commits not merged into main
 - `-` = not applicable
 
@@ -668,27 +658,27 @@ workmux init
 
 ### `workmux open <branch-name>`
 
-Opens a new tmux window for a pre-existing git worktree, setting up the
-configured pane layout and environment. This is useful any time you closed the
-tmux window for a worktree you are still working on.
+Opens a new zellij tab for a pre-existing git worktree, setting up the
+configured pane and environment. This is useful any time you closed the
+zellij tab for a worktree you are still working on.
 
 - `<branch-name>`: Name of the branch that has an existing worktree.
 
 #### Useful options
 
-- `--run-hooks`: Re-runs the `post_create` commands (these block window
+- `--run-hooks`: Re-runs the `post_create` commands (these block tab
   creation).
 - `--force-files`: Re-applies file copy/symlink operations. Useful for restoring
   a deleted `.env` file.
 
 #### What happens
 
-1. Verifies that a worktree for `<branch-name>` exists and a tmux window does
+1. Verifies that a worktree for `<branch-name>` exists and a zellij tab does
    not.
-2. Creates a new tmux window named after the branch.
+2. Creates a new zellij tab named after the branch.
 3. (If specified) Runs file operations and `post_create` hooks.
-4. Sets up your configured tmux pane layout.
-5. Automatically switches your tmux client to the new window.
+4. Runs your configured pane command (if any).
+5. Automatically switches to the new tab.
 
 #### Examples
 
@@ -797,17 +787,15 @@ ln -s ../../project/node_modules .
 npm install
 # ... and other setup steps
 
-# 2. Manually create and configure the tmux window
-tmux new-window -n user-auth
-tmux split-window -h 'npm run dev'
-tmux send-keys -t 0 'claude' C-m
-# ... repeat for every pane in your desired layout
+# 2. Manually create and configure the zellij tab
+zellij action new-tab --name user-auth --cwd $(pwd)
+# ... run your commands manually
 
 # 3. When done, manually merge and clean everything up
 cd ../../project
 git switch main && git pull
 git merge --no-ff user-auth
-tmux kill-window -t user-auth
+zellij action go-to-tab-name user-auth && zellij action close-tab
 git worktree remove ../worktrees/user-auth
 git branch -d user-auth
 ```
@@ -863,7 +851,7 @@ setup:
 
 In a standard Git setup, switching branches disrupts your flow by requiring a
 clean working tree. Worktrees remove this friction. `workmux` automates the
-entire process and pairs each worktree with a dedicated tmux window, creating
+entire process and pairs each worktree with a dedicated zellij tab, creating
 fully isolated development environments. See [Why workmux?](#why-workmux) for
 how workmux streamlines this workflow.
 
@@ -965,20 +953,20 @@ that are safe to share with your team, add them to the project's main
 
 ## Tips
 
-### Closing tmux windows
+### Closing zellij tabs
 
-You can close workmux-managed tmux windows using tmux's standard `kill-window`
-command (e.g., `<prefix> &` or `tmux kill-window -t <window-name>`). This will
-properly terminate all processes running in the window's panes. The git worktree
-will remain on disk, and you can reopen a window for it anytime with:
+You can close workmux-managed zellij tabs using zellij's built-in commands
+(e.g., `zellij action close-tab`). This will terminate processes running in the
+tab. The git worktree will remain on disk, and you can reopen a tab for it
+anytime with:
 
 ```bash
 workmux open <branch-name>
 ```
 
 However, it's recommended to use `workmux merge` or `workmux remove` for cleanup
-instead, as these commands clean up both the tmux window and the git worktree
-together. Use `workmux list` to see which worktrees have detached tmux windows.
+instead, as these commands clean up both the zellij tab and the git worktree
+together. Use `workmux list` to see which worktrees have detached zellij tabs.
 
 ## Shell completions
 
@@ -1007,23 +995,22 @@ workmux completions fish | source
 
 - Rust (for building)
 - Git 2.5+ (for worktree support)
-- tmux
+- zellij
 
 ## Inspiration and related tools
 
 workmux is inspired by [wtp](https://github.com/satococoa/wtp), an excellent git
 worktree management tool. While wtp streamlines worktree creation and setup,
-workmux takes this further by tightly coupling worktrees with tmux window
+workmux takes this further by tightly coupling worktrees with zellij tab
 management.
 
 For managing multiple AI agents in parallel, tools like
 [claude-squad](https://github.com/smtg-ai/claude-squad) and
 [vibe-kanban](https://github.com/BloopAI/vibe-kanban/) offer dedicated
 interfaces, like a TUI or kanban board. In contrast, workmux adheres to its
-philosophy that **tmux is the interface**, providing a native tmux experience
+philosophy that **zellij is the interface**, providing a native zellij experience
 for managing parallel workflows without requiring a separate interface to learn.
 
 ## See also
 
-- [tmux-bro](https://github.com/raine/tmux-bro)
-- [tmux-file-picker](https://github.com/raine/tmux-file-picker)
+- [zellij](https://zellij.dev/) - The terminal multiplexer workmux uses

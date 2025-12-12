@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::{cmd, config, git, prompt::Prompt, tmux};
+use crate::{cmd, config, git, prompt::Prompt, zellij};
 use tracing::{debug, info, trace};
 
 use fs_extra::dir as fs_dir;
@@ -10,7 +10,7 @@ use fs_extra::file as fs_file;
 
 use super::types::CreateResult;
 
-/// Sets up the tmux window, files, and hooks for a worktree.
+/// Sets up the zellij tab, files, and hooks for a worktree.
 /// This is the shared logic between `create` and `open`.
 pub fn setup_environment(
     branch_name: &str,
@@ -39,7 +39,7 @@ pub fn setup_environment(
         );
     }
 
-    // Run post-create hooks before opening tmux so the new window appears "ready"
+    // Run post-create hooks before opening zellij so the new tab appears "ready"
     let mut hooks_run = 0;
     if options.run_hooks
         && let Some(post_create) = &config.post_create
@@ -60,48 +60,41 @@ pub fn setup_environment(
         );
     }
 
-    // Create tmux window and get the initial pane's ID
-    let initial_pane_id = tmux::create_window(
+    // Create zellij tab
+    zellij::create_tab(
         prefix,
         branch_name,
         worktree_path,
         /* detached: */ !options.focus_window,
     )
-    .context("Failed to create tmux window")?;
+    .context("Failed to create zellij tab")?;
     info!(
         branch = branch_name,
-        pane_id = %initial_pane_id,
-        "setup_environment:tmux window created"
+        "setup_environment:zellij tab created"
     );
 
-    // Setup panes
+    // Setup tab with command (simplified single-pane model)
     let panes = config.panes.as_deref().unwrap_or(&[]);
     let resolved_panes = resolve_pane_configuration(panes, agent);
-    let pane_setup_result = tmux::setup_panes(
-        &initial_pane_id,
+    zellij::setup_tab(
         &resolved_panes,
         worktree_path,
-        tmux::PaneSetupOptions {
+        zellij::TabSetupOptions {
             run_commands: options.run_pane_commands,
             prompt_file_path: options.prompt_file_path.as_deref(),
         },
         config,
         agent,
     )
-    .context("Failed to setup panes")?;
+    .context("Failed to setup tab")?;
     debug!(
         branch = branch_name,
-        focus_id = %pane_setup_result.focus_pane_id,
-        "setup_environment:panes configured"
+        "setup_environment:tab configured"
     );
 
-    // Focus the configured pane and optionally switch to the window
+    // Focus the tab if requested
     if options.focus_window {
-        tmux::select_pane(&pane_setup_result.focus_pane_id)?;
-        tmux::select_window(prefix, branch_name)?;
-    } else {
-        // Background mode: do not steal focus from the current window.
-        // We intentionally skip select_window to keep the user's current window.
+        zellij::select_tab(prefix, branch_name)?;
     }
 
     Ok(CreateResult {

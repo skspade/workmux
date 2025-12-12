@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::{thread, time::Duration};
 
-use crate::{cmd, git, tmux};
+use crate::{cmd, git, zellij};
 use tracing::{debug, info, warn};
 
 use super::context::WorkflowContext;
@@ -10,7 +10,7 @@ use super::types::CleanupResult;
 
 const WINDOW_CLOSE_DELAY_MS: u64 = 300;
 
-/// Centralized function to clean up tmux and git resources
+/// Centralized function to clean up zellij and git resources
 pub fn cleanup(
     context: &WorkflowContext,
     branch_name: &str,
@@ -32,10 +32,10 @@ pub fn cleanup(
     // is run from within the worktree being deleted.
     context.chdir_to_main_worktree()?;
 
-    let tmux_running = tmux::is_running().unwrap_or(false);
-    let running_inside_target_window = if tmux_running {
-        match tmux::current_window_name() {
-            Ok(Some(current_name)) => current_name == tmux::prefixed(&context.prefix, branch_name),
+    let zellij_running = zellij::is_running().unwrap_or(false);
+    let running_inside_target_tab = if zellij_running {
+        match zellij::current_tab_name() {
+            Ok(Some(current_name)) => current_name == zellij::prefixed(&context.prefix, branch_name),
             _ => false,
         }
     } else {
@@ -43,12 +43,12 @@ pub fn cleanup(
     };
 
     let mut result = CleanupResult {
-        tmux_window_killed: false,
+        tmux_window_killed: false, // TODO: rename to zellij_tab_closed in types.rs
         worktree_removed: false,
         local_branch_deleted: false,
         remote_branch_deleted: false,
         remote_delete_error: None,
-        ran_inside_target_window: running_inside_target_window,
+        ran_inside_target_window: running_inside_target_tab,
     };
 
     // Helper closure to perform the actual filesystem and git cleanup.
@@ -120,83 +120,78 @@ pub fn cleanup(
         Ok(())
     };
 
-    if running_inside_target_window {
+    if running_inside_target_tab {
         info!(
             branch = branch_name,
-            "cleanup:deferring tmux window kill because command is running inside the window"
+            "cleanup:deferring zellij tab close because command is running inside the tab"
         );
         // Perform all filesystem and git cleanup *before* returning. The caller
-        // will then schedule the asynchronous window close.
+        // will then schedule the asynchronous tab close.
         perform_fs_git_cleanup(&mut result)?;
     } else {
-        // Not running inside the target window, so we kill the window first
+        // Not running inside the target tab, so we close the tab first
         // to release any shell locks on the directory.
-        if tmux_running && tmux::window_exists(&context.prefix, branch_name).unwrap_or(false) {
-            tmux::kill_window(&context.prefix, branch_name)
-                .context("Failed to kill tmux window")?;
-            result.tmux_window_killed = true;
-            info!(branch = branch_name, "cleanup:tmux window killed");
+        if zellij_running && zellij::tab_exists(&context.prefix, branch_name).unwrap_or(false) {
+            zellij::close_tab(&context.prefix, branch_name)
+                .context("Failed to close zellij tab")?;
+            result.tmux_window_killed = true; // TODO: rename field
+            info!(branch = branch_name, "cleanup:zellij tab closed");
 
-            // Poll to confirm the window is gone before proceeding. This prevents a race
+            // Poll to confirm the tab is gone before proceeding. This prevents a race
             // condition where we try to delete the directory before the shell inside
-            // the tmux window has terminated.
+            // the zellij tab has terminated.
             const MAX_RETRIES: u32 = 20;
             const RETRY_DELAY: Duration = Duration::from_millis(50);
-            let mut window_is_gone = false;
+            let mut tab_is_gone = false;
             for _ in 0..MAX_RETRIES {
-                if !tmux::window_exists(&context.prefix, branch_name)? {
-                    window_is_gone = true;
+                if !zellij::tab_exists(&context.prefix, branch_name)? {
+                    tab_is_gone = true;
                     break;
                 }
                 thread::sleep(RETRY_DELAY);
             }
 
-            if !window_is_gone {
+            if !tab_is_gone {
                 warn!(
                     branch = branch_name,
-                    "cleanup:tmux window did not close within retry budget"
+                    "cleanup:zellij tab did not close within retry budget"
                 );
                 eprintln!(
-                    "Warning: tmux window for '{}' did not close in the allotted time. \
+                    "Warning: zellij tab for '{}' did not close in the allotted time. \
                     Filesystem cleanup may fail.",
                     branch_name
                 );
             }
         }
-        // Now that the window is gone, it's safe to clean up the filesystem and git state.
+        // Now that the tab is gone, it's safe to clean up the filesystem and git state.
         perform_fs_git_cleanup(&mut result)?;
     }
 
     Ok(result)
 }
 
-/// Navigate to the main branch window and close the target window.
-/// Handles both cases: running inside the target window (async) and outside (sync).
+/// Navigate to the main branch tab and close the target tab.
+/// Handles both cases: running inside the target tab (async) and outside (sync).
 pub fn navigate_to_main_and_close(
     prefix: &str,
     main_branch: &str,
     target_branch: &str,
     cleanup_result: &CleanupResult,
 ) -> Result<()> {
-    /// Helper function to shell-escape strings for safe inclusion in shell commands
-    fn shell_escape(s: &str) -> String {
-        format!("'{}'", s.replace('\'', r#"'\''"#))
-    }
-
-    // Check if main branch window exists
-    if !tmux::is_running()? || !tmux::window_exists(prefix, main_branch)? {
-        // If main window doesn't exist, still need to close target window if running inside it
+    // Check if main branch tab exists
+    if !zellij::is_running()? || !zellij::tab_exists(prefix, main_branch)? {
+        // If main tab doesn't exist, still need to close target tab if running inside it
         if cleanup_result.ran_inside_target_window {
             let delay = Duration::from_millis(WINDOW_CLOSE_DELAY_MS);
-            match tmux::schedule_window_close(prefix, target_branch, delay) {
+            match zellij::schedule_tab_close(prefix, target_branch, delay) {
                 Ok(_) => info!(
                     branch = target_branch,
-                    "cleanup:tmux window close scheduled"
+                    "cleanup:zellij tab close scheduled"
                 ),
                 Err(e) => warn!(
                     branch = target_branch,
                     error = %e,
-                    "cleanup:failed to schedule tmux window close",
+                    "cleanup:failed to schedule zellij tab close",
                 ),
             }
         }
@@ -204,49 +199,54 @@ pub fn navigate_to_main_and_close(
     }
 
     if cleanup_result.ran_inside_target_window {
-        // Running inside target window: schedule both navigation and kill together
+        // Running inside target tab: schedule both navigation and close together
         let delay = Duration::from_millis(WINDOW_CLOSE_DELAY_MS);
         let delay_secs = format!("{:.3}", delay.as_secs_f64());
-        let main_prefixed = shell_escape(&tmux::prefixed(prefix, main_branch));
-        let target_prefixed = shell_escape(&tmux::prefixed(prefix, target_branch));
+        let main_prefixed = zellij::prefixed(prefix, main_branch);
+        let target_prefixed = zellij::prefixed(prefix, target_branch);
+
+        // Use nohup for async execution since zellij has no run-shell equivalent
         let script = format!(
-            "sleep {delay}; tmux select-window -t ={main} >/dev/null 2>&1; tmux kill-window -t ={target} >/dev/null 2>&1",
+            r#"sleep {delay}; zellij action go-to-tab-name "{main}" 2>/dev/null; zellij action go-to-tab-name "{target}" 2>/dev/null && zellij action close-tab 2>/dev/null"#,
             delay = delay_secs,
             main = main_prefixed,
             target = target_prefixed,
         );
 
-        match tmux::run_shell(&script) {
+        match std::process::Command::new("sh")
+            .args(["-c", &format!("nohup sh -c '{}' >/dev/null 2>&1 &", script)])
+            .spawn()
+        {
             Ok(_) => info!(
                 branch = target_branch,
                 main = main_branch,
-                "cleanup:scheduled navigation to main and window close"
+                "cleanup:scheduled navigation to main and tab close"
             ),
             Err(e) => warn!(
                 branch = target_branch,
                 error = %e,
-                "cleanup:failed to schedule navigation and window close",
+                "cleanup:failed to schedule navigation and tab close",
             ),
         }
     } else {
-        // Running outside target window: synchronously navigate to main and close target
-        tmux::select_window(prefix, main_branch)?;
+        // Running outside target tab: synchronously navigate to main and close target
+        zellij::select_tab(prefix, main_branch)?;
         info!(
             branch = target_branch,
             main = main_branch,
-            "cleanup:navigated to main branch window"
+            "cleanup:navigated to main branch tab"
         );
 
-        // Close the target window now that we've navigated away
-        match tmux::kill_window(prefix, target_branch) {
+        // Close the target tab now that we've navigated away
+        match zellij::close_tab(prefix, target_branch) {
             Ok(_) => info!(
                 branch = target_branch,
-                "cleanup:closed target branch window"
+                "cleanup:closed target branch tab"
             ),
             Err(e) => warn!(
                 branch = target_branch,
                 error = %e,
-                "cleanup:failed to close target branch window",
+                "cleanup:failed to close target branch tab",
             ),
         }
     }

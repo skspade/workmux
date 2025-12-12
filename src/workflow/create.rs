@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
 
-use crate::{git, prompt::Prompt, tmux};
+use crate::{git, prompt::Prompt, zellij};
 use tracing::{debug, info, warn};
 
 use super::cleanup;
@@ -9,7 +9,7 @@ use super::context::WorkflowContext;
 use super::setup;
 use super::types::{CreateResult, SetupOptions};
 
-/// Create a new worktree with tmux window and panes
+/// Create a new worktree with zellij tab
 pub fn create(
     branch_name: &str,
     base_branch: Option<&str>,
@@ -32,11 +32,11 @@ pub fn create(
     }
 
     // Pre-flight checks
-    context.ensure_tmux_running()?;
+    context.ensure_zellij_running()?;
 
-    if tmux::window_exists(&context.prefix, branch_name)? {
+    if zellij::tab_exists(&context.prefix, branch_name)? {
         return Err(anyhow!(
-            "A tmux window named '{}' already exists",
+            "A zellij tab named '{}' already exists",
             branch_name
         ));
     }
@@ -166,7 +166,7 @@ pub fn create(
         );
     }
 
-    // Setup the rest of the environment (tmux, files, hooks)
+    // Setup the rest of the environment (zellij, files, hooks)
     let prompt_file_path = if let Some(p) = prompt {
         Some(setup::write_prompt_file(branch_name, p)?)
     } else {

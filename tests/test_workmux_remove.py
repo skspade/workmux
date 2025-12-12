@@ -3,10 +3,10 @@ from pathlib import Path
 
 
 from .conftest import (
-    TmuxEnvironment,
+    ZellijEnvironment,
     create_commit,
     create_dirty_file,
-    get_window_name,
+    get_tab_name,
     get_worktree_path,
     run_workmux_add,
     run_workmux_remove,
@@ -15,12 +15,12 @@ from .conftest import (
 
 
 def test_remove_clean_branch_succeeds_without_prompt(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove` on a branch with no unmerged commits succeeds without a prompt."""
     env = isolated_tmux_server
     branch_name = "clean-branch"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
 
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
@@ -31,19 +31,18 @@ def test_remove_clean_branch_succeeds_without_prompt(
     run_workmux_remove(env, workmux_exe_path, repo_path, branch_name, force=False)
 
     assert not worktree_path.exists()
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout
+    assert not env.tab_exists(tab_name)
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout
 
 
 def test_remove_unmerged_branch_with_confirmation(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove` on an unmerged branch succeeds after user confirmation."""
     env = isolated_tmux_server
     branch_name = "unmerged-branch"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
@@ -57,19 +56,18 @@ def test_remove_unmerged_branch_with_confirmation(
     )
 
     assert not worktree_path.exists(), "Worktree should be removed after confirmation"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout
+    assert not env.tab_exists(tab_name)
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout
 
 
 def test_remove_unmerged_branch_aborted(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove` on an unmerged branch is aborted if not confirmed."""
     env = isolated_tmux_server
     branch_name = "unmerged-aborted"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
@@ -82,14 +80,13 @@ def test_remove_unmerged_branch_aborted(
     )
 
     assert worktree_path.exists(), "Worktree should NOT be removed after aborting"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name in list_windows_result.stdout
+    assert env.tab_exists(tab_name)
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name in branch_list_result.stdout
 
 
 def test_remove_fails_on_uncommitted_changes(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove` fails if the worktree has uncommitted changes."""
     env = isolated_tmux_server
@@ -114,7 +111,7 @@ def test_remove_fails_on_uncommitted_changes(
 
 
 def test_remove_with_force_on_unmerged_branch(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove -f` removes an unmerged branch without a prompt."""
     env = isolated_tmux_server
@@ -132,7 +129,7 @@ def test_remove_with_force_on_unmerged_branch(
 
 
 def test_remove_with_force_on_uncommitted_changes(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux remove -f` removes a worktree with uncommitted changes."""
     env = isolated_tmux_server
@@ -149,20 +146,20 @@ def test_remove_with_force_on_uncommitted_changes(
     assert not worktree_path.exists(), "Worktree should be removed"
 
 
-def test_remove_from_within_worktree_window_without_branch_arg(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+def test_remove_from_within_worktree_tab_without_branch_arg(
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux remove` without branch arg works from within worktree window."""
+    """Verifies `workmux remove` without branch arg works from within worktree tab."""
     env = isolated_tmux_server
     branch_name = "remove-from-within"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
     worktree_path = get_worktree_path(repo_path, branch_name)
     create_commit(env, worktree_path, "feat: work to remove")
 
-    # Run remove from within the worktree window without specifying branch name
+    # Run remove from within the worktree tab without specifying branch name
     # Should auto-detect the current branch and remove it after confirmation
     run_workmux_remove(
         env,
@@ -171,30 +168,29 @@ def test_remove_from_within_worktree_window_without_branch_arg(
         branch_name=None,  # Don't specify branch - should auto-detect
         force=False,
         user_input="y",
-        from_window=window_name,
+        from_tab=tab_name,
     )
 
     assert not worktree_path.exists(), "Worktree should be removed"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout, "Window should be closed"
+    assert not env.tab_exists(tab_name), "Tab should be closed"
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout, "Branch should be removed"
 
 
-def test_remove_force_from_within_worktree_window_without_branch_arg(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+def test_remove_force_from_within_worktree_tab_without_branch_arg(
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux remove -f` without branch arg works from within worktree window."""
+    """Verifies `workmux remove -f` without branch arg works from within worktree tab."""
     env = isolated_tmux_server
     branch_name = "force-remove-from-within"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
     worktree_path = get_worktree_path(repo_path, branch_name)
     create_commit(env, worktree_path, "feat: unmerged work")
 
-    # Run remove -f from within the worktree window without specifying branch name
+    # Run remove -f from within the worktree tab without specifying branch name
     # Should auto-detect the current branch and remove it without confirmation
     run_workmux_remove(
         env,
@@ -202,23 +198,22 @@ def test_remove_force_from_within_worktree_window_without_branch_arg(
         repo_path,
         branch_name=None,  # Don't specify branch - should auto-detect
         force=True,
-        from_window=window_name,
+        from_tab=tab_name,
     )
 
     assert not worktree_path.exists(), "Worktree should be removed"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout, "Window should be closed"
+    assert not env.tab_exists(tab_name), "Tab should be closed"
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout, "Branch should be removed"
 
 
 def test_remove_with_keep_branch_flag(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux remove --keep-branch` removes worktree and window but keeps the branch."""
+    """Verifies `workmux remove --keep-branch` removes worktree and tab but keeps the branch."""
     env = isolated_tmux_server
     branch_name = "keep-branch-test"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
@@ -237,9 +232,8 @@ def test_remove_with_keep_branch_flag(
     # Verify worktree is removed
     assert not worktree_path.exists(), "Worktree should be removed"
 
-    # Verify tmux window is removed
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout, "Window should be closed"
+    # Verify zellij tab is removed
+    assert not env.tab_exists(tab_name), "Tab should be closed"
 
     # Verify branch still exists
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
@@ -247,7 +241,7 @@ def test_remove_with_keep_branch_flag(
 
 
 def test_remove_checks_against_stored_base_branch(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies that remove checks for unmerged changes against the stored base branch, not main."""
     env = isolated_tmux_server

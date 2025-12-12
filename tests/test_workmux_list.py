@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Dict, List
 
 from .conftest import (
-    TmuxEnvironment,
+    ZellijEnvironment,
     create_commit,
-    get_window_name,
+    get_tab_name,
     get_worktree_path,
     run_workmux_add,
     run_workmux_command,
@@ -15,14 +15,13 @@ from .conftest import (
 
 
 def run_workmux_list(
-    env: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    env: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ) -> str:
     """
-    Runs `workmux list` inside the isolated tmux session and returns the output.
+    Runs `workmux list` inside the isolated environment and returns the output.
     """
-    run_workmux_command(env, workmux_exe_path, repo_path, "list")
-    stdout_file = env.tmp_path / "workmux_stdout.txt"
-    return stdout_file.read_text()
+    result = run_workmux_command(env, workmux_exe_path, repo_path, "list")
+    return result.stdout
 
 
 def parse_list_output(output: str) -> List[Dict[str, str]]:
@@ -60,7 +59,7 @@ def parse_list_output(output: str) -> List[Dict[str, str]]:
 
 
 def test_list_output_format(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux list` produces correctly formatted table output."""
     env = isolated_tmux_server
@@ -77,21 +76,21 @@ def test_list_output_format(
 
     # Verify header is present
     assert "BRANCH" in output
-    assert "TMUX" in output
+    assert "ZELLIJ" in output
     assert "UNMERGED" in output
     assert "PATH" in output
 
     # Verify main branch entry - should show "(here)" when run from repo_path
     main_entry = next((r for r in parsed_output if r["BRANCH"] == "main"), None)
     assert main_entry is not None
-    assert main_entry["TMUX"] == "-"
+    assert main_entry["ZELLIJ"] == "-"
     assert main_entry["UNMERGED"] == "-"
     assert main_entry["PATH"] == "(here)"
 
     # Verify feature branch entry - shows as relative path
     feature_entry = next((r for r in parsed_output if r["BRANCH"] == branch_name), None)
     assert feature_entry is not None
-    assert feature_entry["TMUX"] == "✓"
+    assert feature_entry["ZELLIJ"] == "✓"
     assert feature_entry["UNMERGED"] == "-"
     # Convert relative path to absolute and compare
     expected_relative = os.path.relpath(worktree_path, repo_path)
@@ -99,7 +98,7 @@ def test_list_output_format(
 
 
 def test_list_initial_state(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `workmux list` shows only the main branch in a new repo."""
     env = isolated_tmux_server
@@ -110,21 +109,21 @@ def test_list_initial_state(
 
     main_entry = parsed_output[0]
     assert main_entry["BRANCH"] == "main"
-    assert main_entry["TMUX"] == "-"
+    assert main_entry["ZELLIJ"] == "-"
     assert main_entry["UNMERGED"] == "-"
     # When run from repo_path, main branch shows as "(here)"
     assert main_entry["PATH"] == "(here)"
 
 
 def test_list_with_active_worktree(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `list` shows an active worktree with a tmux window ('✓')."""
+    """Verifies `list` shows an active worktree with a zellij tab ('✓')."""
     env = isolated_tmux_server
     branch_name = "feature-active"
     write_workmux_config(repo_path)
 
-    # Create the worktree and window
+    # Create the worktree and tab
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
     output = run_workmux_list(env, workmux_exe_path, repo_path)
@@ -135,7 +134,7 @@ def test_list_with_active_worktree(
         (r for r in parsed_output if r["BRANCH"] == branch_name), None
     )
     assert worktree_entry is not None
-    assert worktree_entry["TMUX"] == "✓"
+    assert worktree_entry["ZELLIJ"] == "✓"
     assert worktree_entry["UNMERGED"] == "-"
     # Path shows as relative when run from repo_path
     expected_path = get_worktree_path(repo_path, branch_name)
@@ -144,7 +143,7 @@ def test_list_with_active_worktree(
 
 
 def test_list_with_unmerged_commits(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies `list` shows a worktree with unmerged commits ('●')."""
     env = isolated_tmux_server
@@ -162,22 +161,22 @@ def test_list_with_unmerged_commits(
         (r for r in parsed_output if r["BRANCH"] == branch_name), None
     )
     assert worktree_entry is not None
-    assert worktree_entry["TMUX"] == "✓"
+    assert worktree_entry["ZELLIJ"] == "✓"
     assert worktree_entry["UNMERGED"] == "●"
 
 
-def test_list_with_detached_window(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+def test_list_with_detached_tab(
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `list` shows a worktree whose tmux window has been closed ('-')."""
+    """Verifies `list` shows a worktree whose zellij tab has been closed ('-')."""
     env = isolated_tmux_server
     branch_name = "feature-detached"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
-    # Kill the tmux window manually
-    env.tmux(["kill-window", "-t", window_name])
+    # Close the zellij tab manually
+    env.close_tab(tab_name)
 
     output = run_workmux_list(env, workmux_exe_path, repo_path)
     parsed_output = parse_list_output(output)
@@ -185,22 +184,20 @@ def test_list_with_detached_window(
         (r for r in parsed_output if r["BRANCH"] == branch_name), None
     )
     assert worktree_entry is not None
-    assert worktree_entry["TMUX"] == "-"
+    assert worktree_entry["ZELLIJ"] == "-"
     assert worktree_entry["UNMERGED"] == "-"
 
 
 def test_list_alias_ls_works(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies that the `ls` alias for `list` works correctly."""
     env = isolated_tmux_server
 
     # Run `ls` and verify it produces expected output
-    run_workmux_command(env, workmux_exe_path, repo_path, "ls")
-    stdout_file = env.tmp_path / "workmux_stdout.txt"
-    ls_output = stdout_file.read_text()
+    result = run_workmux_command(env, workmux_exe_path, repo_path, "ls")
 
-    parsed_output = parse_list_output(ls_output)
+    parsed_output = parse_list_output(result.stdout)
     assert len(parsed_output) == 1
     assert parsed_output[0]["BRANCH"] == "main"
     # When run from repo_path, main branch shows as "(here)"

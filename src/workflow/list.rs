@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 
-use crate::{config, git, tmux};
+use crate::{config, git, zellij};
 
 use super::types::WorktreeInfo;
 
@@ -16,9 +16,9 @@ pub fn list(config: &config::Config) -> Result<Vec<WorktreeInfo>> {
         return Ok(Vec::new());
     }
 
-    // Check tmux status and get all windows once to avoid repeated process calls
-    let tmux_windows: std::collections::HashSet<String> = if tmux::is_running().unwrap_or(false) {
-        tmux::get_all_window_names().unwrap_or_default()
+    // Check zellij status and get all tabs once to avoid repeated process calls
+    let zellij_tabs: std::collections::HashSet<String> = if zellij::is_running().unwrap_or(false) {
+        zellij::get_all_tab_names().unwrap_or_default()
     } else {
         std::collections::HashSet::new()
     };
@@ -38,8 +38,8 @@ pub fn list(config: &config::Config) -> Result<Vec<WorktreeInfo>> {
     let worktrees: Vec<WorktreeInfo> = worktrees_data
         .into_iter()
         .map(|(path, branch)| {
-            let prefixed_branch_name = tmux::prefixed(prefix, &branch);
-            let has_tmux = tmux_windows.contains(&prefixed_branch_name);
+            let prefixed_branch_name = zellij::prefixed(prefix, &branch);
+            let has_tmux = zellij_tabs.contains(&prefixed_branch_name); // TODO: rename field to has_zellij
 
             // Check for unmerged commits, but only if this isn't the main branch
             let has_unmerged = if let Some(ref main) = main_branch {

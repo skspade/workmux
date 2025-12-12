@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::{cmd, git};
-use which::{which, which_in};
+use crate::git;
+use which::which;
 
 /// Default script for cleaning up node_modules directories before worktree deletion.
 /// This script moves node_modules to a temporary location and deletes them in the background,
@@ -59,11 +59,11 @@ pub struct Config {
     #[serde(default)]
     pub worktree_dir: Option<String>,
 
-    /// Prefix for tmux window names (optional, defaults to "wm-")
+    /// Prefix for zellij tab names (optional, defaults to "wm-")
     #[serde(default)]
     pub window_prefix: Option<String>,
 
-    /// Tmux pane configuration
+    /// Pane configuration (note: zellij only supports single-pane mode, first pane is used)
     #[serde(default)]
     pub panes: Option<Vec<PaneConfig>>,
 
@@ -84,7 +84,7 @@ pub struct Config {
     pub files: FileConfig,
 }
 
-/// Configuration for a single tmux pane
+/// Configuration for a single pane (note: zellij only uses the first pane)
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PaneConfig {
     /// A command to run when the pane is created. The pane will remain open
@@ -396,14 +396,14 @@ impl Config {
 # Default: A sibling directory named '<project_name>__worktrees'.
 # worktree_dir: .worktrees
 
-# Custom prefix for tmux window names.
+# Custom prefix for zellij tab names.
 # window_prefix: wm-
 
 # The agent command to use when <agent> is specified in pane commands.
 # agent: claude
 
-# Commands to run in the new worktree before the tmux window is opened.
-# These hooks block window creation, so reserve them for short tasks.
+# Commands to run in the new worktree before the zellij tab is opened.
+# These hooks block tab creation, so reserve them for short tasks.
 # For long-running setup (e.g., pnpm install), prefer pane `command`s instead.
 # To disable, set to an empty list: `post_create: []`
 # post_create:
@@ -419,19 +419,12 @@ impl Config {
 # Or disable:
 # pre_delete: []
 
-# Custom tmux pane layout for this project.
-# Default: A two-pane layout with a shell and clear command
+# Pane configuration for this project.
+# Note: zellij integration only supports single-pane mode; the first pane is used.
 # panes:
-#   # Run a long-running command like pnpm install; a shell remains afterward
+#   # Run a command in the pane; a shell remains afterward
 #   - command: pnpm install
 #     focus: true
-#
-#   # Just a default shell (command is omitted)
-#   - split: horizontal
-#
-#   # Run a command that exits immediately
-#   - command: clear
-#     split: vertical
 
 # File operations to perform when creating a worktree.
 files:
@@ -462,8 +455,7 @@ files:
 /// Resolves an executable name or path to its full absolute path.
 ///
 /// For absolute paths, returns as-is. For relative paths, resolves against current directory.
-/// For plain executable names (e.g., "claude"), searches first in tmux's global PATH
-/// (since panes will run in tmux's environment), then falls back to the current shell's PATH.
+/// For plain executable names (e.g., "claude"), searches in the current shell's PATH.
 /// Returns None if the executable cannot be found.
 pub fn resolve_executable_path(executable: &str) -> Option<String> {
     let exec_path = Path::new(executable);
@@ -479,28 +471,11 @@ pub fn resolve_executable_path(executable: &str) -> Option<String> {
         if let Ok(current_dir) = env::current_dir() {
             return Some(current_dir.join(exec_path).to_string_lossy().into_owned());
         }
-    } else {
-        if let Some(tmux_path) = tmux_global_path() {
-            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            if let Ok(found) = which_in(executable, Some(tmux_path.as_str()), &cwd) {
-                return Some(found.to_string_lossy().into_owned());
-            }
-        }
-
-        if let Ok(found) = which(executable) {
-            return Some(found.to_string_lossy().into_owned());
-        }
+    } else if let Ok(found) = which(executable) {
+        return Some(found.to_string_lossy().into_owned());
     }
 
     None
-}
-
-pub fn tmux_global_path() -> Option<String> {
-    let output = cmd::Cmd::new("tmux")
-        .args(&["show-environment", "-g", "PATH"])
-        .run_and_capture_stdout()
-        .ok()?;
-    output.strip_prefix("PATH=").map(|s| s.to_string())
 }
 
 pub fn split_first_token(command: &str) -> Option<(&str, &str)> {

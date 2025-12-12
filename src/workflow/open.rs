@@ -1,13 +1,13 @@
 use anyhow::{Context, Result, anyhow};
 
-use crate::{git, tmux};
+use crate::{git, zellij};
 use tracing::info;
 
 use super::context::WorkflowContext;
 use super::setup;
 use super::types::{CreateResult, SetupOptions};
 
-/// Open a tmux window for an existing worktree
+/// Open a zellij tab for an existing worktree
 pub fn open(
     branch_name: &str,
     context: &WorkflowContext,
@@ -26,13 +26,13 @@ pub fn open(
     }
 
     // Pre-flight checks
-    context.ensure_tmux_running()?;
+    context.ensure_zellij_running()?;
 
-    if tmux::window_exists(&context.prefix, branch_name)? {
+    if zellij::tab_exists(&context.prefix, branch_name)? {
         return Err(anyhow!(
-            "A tmux window named '{}' already exists. To switch to it, run: tmux select-window -t '{}'",
+            "A zellij tab named '{}' already exists. To switch to it, run: zellij action go-to-tab-name '{}'",
             branch_name,
-            tmux::prefixed(&context.prefix, branch_name)
+            zellij::prefixed(&context.prefix, branch_name)
         ));
     }
 

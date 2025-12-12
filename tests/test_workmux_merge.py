@@ -1,10 +1,10 @@
 from pathlib import Path
 
 from .conftest import (
-    TmuxEnvironment,
+    ZellijEnvironment,
     create_commit,
     create_dirty_file,
-    get_window_name,
+    get_tab_name,
     get_worktree_path,
     run_workmux_add,
     run_workmux_merge,
@@ -13,12 +13,12 @@ from .conftest import (
 
 
 def test_merge_default_strategy_succeeds_and_cleans_up(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies a standard merge succeeds and cleans up all resources."""
     env = isolated_tmux_server
     branch_name = "feature-to-merge"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path, env=env)
 
     # Branch off first, then create commits on both branches to force a merge commit
@@ -42,8 +42,7 @@ def test_merge_default_strategy_succeeds_and_cleans_up(
     run_workmux_merge(env, workmux_exe_path, repo_path, branch_name)
 
     assert not worktree_path.exists(), "Worktree directory should be removed"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout, "Tmux window should be closed"
+    assert not env.tab_exists(tab_name), "Zellij tab should be closed"
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout, (
         "Local branch should be deleted"
@@ -55,12 +54,12 @@ def test_merge_default_strategy_succeeds_and_cleans_up(
 
 
 def test_merge_from_within_worktree_succeeds(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies `workmux merge` with no branch arg works from inside the worktree window."""
+    """Verifies `workmux merge` with no branch arg works from inside the worktree tab."""
     env = isolated_tmux_server
-    branch_name = "feature-in-window"
-    window_name = get_window_name(branch_name)
+    branch_name = "feature-in-tab"
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path, env=env)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
@@ -72,18 +71,17 @@ def test_merge_from_within_worktree_succeeds(
         workmux_exe_path,
         repo_path,
         branch_name=None,
-        from_window=window_name,
+        from_tab=tab_name,
     )
 
     assert not worktree_path.exists()
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name not in list_windows_result.stdout
+    assert not env.tab_exists(tab_name)
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name not in branch_list_result.stdout
 
 
 def test_merge_rebase_strategy_succeeds(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies --rebase merge results in a linear history."""
     env = isolated_tmux_server
@@ -130,7 +128,7 @@ def test_merge_rebase_strategy_succeeds(
 
 
 def test_merge_squash_strategy_succeeds(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies --squash merge combines multiple commits into one."""
     env = isolated_tmux_server
@@ -163,7 +161,7 @@ def test_merge_squash_strategy_succeeds(
 
 
 def test_merge_fails_on_unstaged_changes(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies merge fails if worktree has unstaged changes."""
     env = isolated_tmux_server
@@ -183,7 +181,7 @@ def test_merge_fails_on_unstaged_changes(
 
 
 def test_merge_succeeds_with_ignore_uncommitted_flag(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies --ignore-uncommitted allows merge despite unstaged changes."""
     env = isolated_tmux_server
@@ -203,7 +201,7 @@ def test_merge_succeeds_with_ignore_uncommitted_flag(
 
 
 def test_merge_commits_staged_changes_before_merge(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies merge automatically commits staged changes."""
     env = isolated_tmux_server
@@ -224,7 +222,7 @@ def test_merge_commits_staged_changes_before_merge(
 
 
 def test_merge_fails_if_main_worktree_has_uncommitted_changes(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
     """Verifies merge fails if main worktree has uncommitted changes."""
     env = isolated_tmux_server
@@ -243,12 +241,12 @@ def test_merge_fails_if_main_worktree_has_uncommitted_changes(
 
 
 def test_merge_with_keep_flag_skips_cleanup(
-    isolated_tmux_server: TmuxEnvironment, workmux_exe_path: Path, repo_path: Path
+    isolated_tmux_server: ZellijEnvironment, workmux_exe_path: Path, repo_path: Path
 ):
-    """Verifies --keep flag merges without cleaning up worktree, window, or branch."""
+    """Verifies --keep flag merges without cleaning up worktree, tab, or branch."""
     env = isolated_tmux_server
     branch_name = "feature-to-keep"
-    window_name = get_window_name(branch_name)
+    tab_name = get_tab_name(branch_name)
     write_workmux_config(repo_path, env=env)
     run_workmux_add(env, workmux_exe_path, repo_path, branch_name)
 
@@ -268,7 +266,6 @@ def test_merge_with_keep_flag_skips_cleanup(
 
     # Verify cleanup did NOT happen
     assert worktree_path.exists(), "Worktree should still exist with --keep"
-    list_windows_result = env.tmux(["list-windows", "-F", "#{window_name}"])
-    assert window_name in list_windows_result.stdout, "Tmux window should still exist"
+    assert env.tab_exists(tab_name), "Zellij tab should still exist"
     branch_list_result = env.run_command(["git", "branch", "--list", branch_name])
     assert branch_name in branch_list_result.stdout, "Local branch should still exist"
